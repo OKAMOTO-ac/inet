@@ -6,10 +6,10 @@ import csv
 import os
 from geopy.geocoders import Nominatim # geopyをインポート
 import folium
-
+import requests
 
 FILE_PATH = './event_data.csv'
-COLS = ['イベント名', '地域', '日付', 'lat', 'lon', '住所', 'tag', 'time', 'detail']
+COLS = ['name', 'location', 'date', 'lat', 'lon', 'address', 'tag', 'time', 'detail']
 
 @st.cache_resource
 def get_geolocator():
@@ -35,10 +35,10 @@ def geocode_address(addr):
 @st.cache_data
 def load_data():
     if not os.path.exists(FILE_PATH):
-        init_data = {'イベント名': ['倉吉打吹まつり', '淀川花火大会', '神戸ルミナリエ', '岡山桃太郎祭り'],
-                     '地域': ['鳥取', '大阪', '兵庫', '岡山'], '日付': ['2025/08/01', '2025/08/09', '2025/12/06', '2025/08/02'],
+        init_data = {'name': ['倉吉打吹まつり', '淀川花火大会', '神戸ルミナリエ', '岡山桃太郎祭り'],
+                     'location': ['鳥取', '大阪', '兵庫', '岡山'], 'date': ['2025/08/01', '2025/08/09', '2025/12/06', '2025/08/02'],
                      'lat': [35.4920, 34.7073, 34.6923, 34.6617], 'lon': [133.8242, 135.4851, 135.1916, 133.9180],
-                     '住所': ['鳥取県倉吉市湊町', '大阪府大阪市淀川区新北野', '兵庫県神戸市中央区加納町', '岡山県岡山市北区表町'],
+                     'address': ['鳥取県倉吉市湊町', '大阪府大阪市淀川区新北野', '兵庫県神戸市中央区加納町', '岡山県岡山市北区表町'],
                      'tag': ["['祭り']", "['花火大会']", "['イルミネーション']", "['祭り']"],
                      'time': ["18:00:00", "19:30:00", "17:30:00", "18:00:00"],
                      'detail': ['倉吉市の夏祭り', '関西最大級の花火大会', '冬の神戸を彩る光の祭典', '岡山の夏の風物詩']}
@@ -71,8 +71,8 @@ def add_event():
         if lat is None or lon is None:
              st.warning("この住所の座標が見つかりませんでした。イベントは追加されますが、地図には表示されません。")
 
-        new_event = {'イベント名': name, '地域': '', '日付': date.strftime('%Y/%m/%d'), 'lat': lat, 'lon': lon, 
-                     '住所': addr, 'tag': str(tag), 'time': str(time), 'detail': detail}
+        new_event = {'name': name, 'location': '', 'date': date.strftime('%Y/%m/%d'), 'lat': lat, 'lon': lon, 
+                     'address': addr, 'tag': str(tag), 'time': str(time), 'detail': detail}
         
         row_data = [new_event.get(h, '') for h in COLS] 
         is_new_file = not os.path.exists(FILE_PATH)
@@ -105,7 +105,7 @@ keyword = st.text_input(label="イベント名・キーワード検索", value="
 # データフィルタリング
 if keyword:
     filtered_df = df[df.apply(lambda row: any(keyword.lower() in str(row[col]).lower() 
-                                               for col in ['イベント名', '地域', '住所', 'tag']), axis=1)]
+                                               for col in ['name', 'location', 'address', 'tag']), axis=1)]
 else:
     filtered_df = df
 
@@ -115,50 +115,68 @@ st.write("入力されたキーワード：", keyword)
 st.subheader('イベントマップ')
 map_df = filtered_df.dropna(subset=['lat', 'lon'])
 
-if not map_df.empty:
-    layer = pdk.Layer("ScatterplotLayer", map_df, get_position=["lon", "lat"],
-                      get_color=[255, 69, 0, 200], get_radius=1500, pickable=True, auto_highlight=True)
-    view_state = pdk.ViewState(latitude=map_df['lat'].mean(), longitude=map_df['lon'].mean(), zoom=7, pitch=0)
-    
-    tooltip_html = """
-    <div style="padding: 10px; background: rgba(0, 0, 0, 0.8); color: white; border-radius: 5px;">
-        <h3 style="margin: 0 0 5px 0;">{イベント名}</h3>
-        <p style="margin: 0;">日付: {日付}</p>
-        <p style="margin: 0;">住所: {住所}</p>
-        <p style="margin: 0;">タグ: {tag}</p>
-    </div>
-    """
-    st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state, tooltip={"html": tooltip_html}))
-else:
-    st.info("地図表示に必要な情報がありません。")
-
-# イベント一覧とリンク 
-st.subheader('検索結果一覧')
-st.dataframe(filtered_df.drop(columns=['lat', 'lon'], errors='ignore'), use_container_width=True) 
-
 # foliumで地図表示
+# 現在地の取得
+response = requests.get("https://ipinfo.io/json")
+data = response.json()
+loc = data['loc'].split(',')
+user_lat, user_lon = float(loc[0]), float(loc[1])
+# 東京の緯度経度をデフォルトに設定
+DEFAULT_LAT = 35.6895
+DEFAULT_LON = 139.6917
+
+try:
+    response = requests.get("https://ipinfo.io/json")
+    response.raise_for_status()  # HTTPエラーがあれば例外を発生させる
+    data = response.json()
+    
+    if 'loc' in data and data['loc']:
+        loc = data['loc'].split(',')
+        user_lat, user_lon = float(loc[0]), float(loc[1])
+    else:
+        # 'loc'キーがない場合、手動でエラーを発生させてexceptブロックに移行
+        raise KeyError()
+    # -------------------------------------------------
+
+except (requests.exceptions.RequestException, KeyError, ValueError) as e:
+    # ネットワークエラー、キーエラー、値エラーのいずれかが発生した場合
+    st.write(f"位置情報の取得に失敗しました。デフォルトの場所を使います。")
+    user_lat, user_lon = DEFAULT_LAT, DEFAULT_LON
+
 # 地図の中央を設定
-map_center = [map_df['lat'].mean(), map_df['lon'].mean()] if not map_df.empty else [35.6895, 139.6917]  # 東京の緯度経度をデフォルトに設定
+map_center = [user_lat, user_lon]
 m = folium.Map(location=map_center, zoom_start=14)
+
+folium.Marker(
+        location=[user_lat, user_lon],
+        popup="あなたの現在地",
+        icon=folium.Icon(color="red", icon="home")
+    ).add_to(m)
 
 # 地図上にピンを立てる
 for i, row in filtered_df.iterrows():
-    name = row['イベント名']
-    addr = row['住所'] if row['住所'] else row['地域']
+    name = row['name']
+    addr = row['address'] if row['address'] else row['location']
     query = urllib.parse.quote_plus(f"{name} {addr}")
     url = f"https://www.google.com/maps/search/?api=1&query={query}"
     folium.Marker(
         location=[row['lat'], row['lon']],
-        popup=f"イベント名：{row['イベント名']}\n 日付：{row['日付']}\n <a href='{url}' target='_blank'>Googleマップで場所を開く</a>",
+        popup=f"イベント名：{row['name']}\n 日付：{row['date']}\n <a href='{url}' target='_blank'>Googleマップで場所を開く</a>",
         icon=folium.Icon(color="blue")
     ).add_to(m)
 
 st.components.v1.html(m._repr_html_(), height=600)
 
+# イベント一覧とリンク 
+st.subheader('検索結果一覧')
+st.dataframe(filtered_df.drop(columns=['lat', 'lon'], errors='ignore'), use_container_width=True) 
+
+
+
 st.subheader('外部Googleマップ検索リンク')
 for idx, row in filtered_df.iterrows():
-    name = row['イベント名']
-    addr = row['住所'] if row['住所'] else row['地域']
+    name = row['name']
+    addr = row['address'] if row['address'] else row['location']
     query = urllib.parse.quote_plus(f"{name} {addr}")
     url = f"https://www.google.com/maps/search/?api=1&query={query}"
     st.markdown(f"**{name}**: <a href='{url}' target='_blank'>Googleマップで場所を開く</a>", unsafe_allow_html=True)
