@@ -8,6 +8,7 @@ import ast
 from geopy.geocoders import Nominatim
 import folium
 import requests
+import datetime
 
 file_path = './event_data.csv'
 
@@ -97,13 +98,27 @@ with col2:
     if st.button('イベントを追加', key='add_event_dialog_button'):
         add_event()
 
-keyword = st.text_input(
+col1, col2, = st.columns([3,1])
+with col1:
+    keyword = st.text_input(
     label="イベント名・キーワード検索",
     value="",
     placeholder="例：花火"
-)
-if keyword:
-    st.write("入力されたキーワード：", keyword)
+    )
+    if keyword:
+        st.write("入力されたキーワード：", keyword)
+with col2:
+    tag = st.selectbox(
+        "",
+        ["タグを選択", '花火大会', '祭り', 'コンサート'],
+        # label_visibility="collapsed"
+    )
+
+col1, col2 = st.columns(2)
+with col1:
+    start_date = st.date_input("開始日", value=pd.to_datetime(df['date']).min())
+with col2:
+    end_date = st.date_input("終了日", value=pd.to_datetime(df['date']).max())
 
 st.divider()
 
@@ -139,10 +154,17 @@ else:
     # --- 検索フィルタ ---
     if keyword:
         df_filtered = df_to_show[df_to_show.apply(lambda row: row.astype(str).str.contains(keyword, case=False).any(), axis=1)]
-        st.subheader(f"検索結果：{len(df_filtered)} 件")
     else:
         df_filtered = df_to_show
-
+    ## --- タグ検索 ---
+    if tag != "タグを選択":
+        df_filtered = df_filtered[df_filtered['tag'].apply(lambda x: tag in x)]
+    ## --- 日付検索 ---
+    df_filtered = df_filtered[
+        (pd.to_datetime(df_to_show['date']) >= pd.to_datetime(start_date)) &
+        (pd.to_datetime(df_to_show['date']) <= pd.to_datetime(end_date))
+    ]
+    st.subheader(f"検索結果：{len(df_filtered)} 件")
     for index, row in df_filtered.iterrows():
         with st.container(border=True):
             col_content, col_image = st.columns([3, 1])
