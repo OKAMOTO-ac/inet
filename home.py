@@ -64,7 +64,14 @@ st.divider()
 
 df = pd.read_csv('event_data.csv')
 
-for index, row in df.iterrows():
+# --- 検索フィルタ ---
+if keyword:
+    filtered_df = df[df.apply(lambda row: row.astype(str).str.contains(keyword, case=False).any(), axis=1)]
+    st.subheader(f"検索結果：{len(filtered_df)} 件")
+else:
+    filtered_df = df
+
+for index, row in filtered_df.iterrows():
     with st.container(border=True):
         st.markdown(f"#### {row['name']}")
         
