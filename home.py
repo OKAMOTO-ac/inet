@@ -109,7 +109,7 @@ with col1:
         st.write("入力されたキーワード：", keyword)
 with col2:
     tag = st.selectbox(
-        "",
+        "タグで絞り込み:",
         ["タグを選択", '花火大会', '祭り', 'コンサート'],
         # label_visibility="collapsed"
     )
@@ -135,8 +135,6 @@ TAG_IMAGES = {
 }
 DEFAULT_IMAGE = 'images/default.jpg'
 
-df = pd.read_csv(file_path)
-
 if df.empty:
     st.info("イベントデータがありません。イベントを追加してください。")
 else:
@@ -161,8 +159,8 @@ else:
         df_filtered = df_filtered[df_filtered['tag'].apply(lambda x: tag in x)]
     ## --- 日付検索 ---
     df_filtered = df_filtered[
-        (pd.to_datetime(df_to_show['date']) >= pd.to_datetime(start_date)) &
-        (pd.to_datetime(df_to_show['date']) <= pd.to_datetime(end_date))
+        (pd.to_datetime(df_filtered['date']) >= pd.to_datetime(start_date)) &
+        (pd.to_datetime(df_filtered['date']) <= pd.to_datetime(end_date))
     ]
     st.subheader(f"検索結果：{len(df_filtered)} 件")
     for index, row in df_filtered.iterrows():
