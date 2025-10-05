@@ -4,5 +4,6 @@
 ### 必要なライブラリのインストール
 `pip install -r requirement.txt`
 ### 実行
-`streamlit run main.py`\n
+`streamlit run main.py`
+
 実行後にサインアップ・ログインが必要です
