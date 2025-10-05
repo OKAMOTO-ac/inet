@@ -2,8 +2,11 @@ import streamlit as st
 import pandas as pd
 import csv
 import os
+import datetime
 
 st.header('周辺のお祭り(地域行事)検索システム')
+
+df = pd.read_csv('event_data.csv')
 
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -49,25 +52,46 @@ if st.button('イベントを追加'):
     st.session_state.yourevent = None
     # st.success('イベントが追加されました')
 
-
-keyword = st.text_input(
+col1, col2, = st.columns([3,1])
+with col1:
+    keyword = st.text_input(
     label="イベント名・キーワード検索",
     value="",
     placeholder="例：花火"
-)
-if keyword:
-    st.write("入力されたキーワード：", keyword)
+    )
+    if keyword:
+        st.write("入力されたキーワード：", keyword)
+with col2:
+    tag = st.selectbox(
+        "",
+        ["タグを選択", '花火大会', '祭り', 'コンサート'],
+        # label_visibility="collapsed"
+    )
+# with col3:
+#     search_btn = st.button("検索")
+
+col1, col2 = st.columns(2)
+with col1:
+    start_date = st.date_input("開始日", value=pd.to_datetime(df['date']).min())
+with col2:
+    end_date = st.date_input("終了日", value=pd.to_datetime(df['date']).max())
 
 st.divider()
 
-df = pd.read_csv('event_data.csv')
-
 # --- 検索フィルタ ---
+filtered_df = df
+## --- キーワード検索 ---
 if keyword:
     filtered_df = df[df.apply(lambda row: row.astype(str).str.contains(keyword, case=False).any(), axis=1)]
-    st.subheader(f"検索結果：{len(filtered_df)} 件")
-else:
-    filtered_df = df
+## --- タグ検索 ---
+if tag != "タグを選択":
+    filtered_df = filtered_df[filtered_df['tag'].apply(lambda x: tag in x)]
+## --- 日付検索 ---
+filtered_df = filtered_df[
+    (pd.to_datetime(filtered_df['date']) >= pd.to_datetime(start_date)) &
+    (pd.to_datetime(filtered_df['date']) <= pd.to_datetime(end_date))
+]
+st.subheader(f"検索結果：{len(filtered_df)} 件")
 
 for index, row in filtered_df.iterrows():
     with st.container(border=True):
