@@ -100,7 +100,7 @@ with col_login_btn:
 if 'likes' not in st.session_state:
     st.session_state.likes = []
     
-st.header('周辺のお祭り(地域行事)検索システム')
+st.header('イベント見つける君')
 
 df = load_data()
 col1, col2 = st.columns(2)
