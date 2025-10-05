@@ -2,21 +2,17 @@ import streamlit as st
 import pandas as pd
 import csv
 import os
+import ast
 
-
+if 'likes' not in st.session_state:
+    st.session_state.likes = []
 
 st.header('周辺のお祭り(地域行事)検索システム')
 
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 with col1:
     if st.button('my page'):
         st.write('my pageが押されました。')
-with col2:
-    if st.button('お気に入り'):
-        st.write('お気に入りが押されました。')
-with col3:
-    if st.button('＋イベントを追加'):
-        st.write('イベントを追加が押されました。')
 
 file_path = './event_data.csv'
 
@@ -29,28 +25,23 @@ def add_event():
     event_time = st.time_input('イベント時刻')
     event_detail = st.text_area('イベント詳細')
     if st.button('追加'):
-        st.success('イベントが追加されました')
-        st.session_state.yourevent = {'name': event_name, 'tag': event_tag, 'date': event_date, 'time': event_time, 'detail': event_detail}
+        new_event_data = [event_name, str(event_tag), event_date, event_time, event_detail]
         
         if not os.path.exists(file_path):
             with open(file_path, 'w', encoding='utf-8', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow(['name', 'tag', 'date', 'time', 'detail'])
-                writer.writerow([st.session_state.yourevent['name'], st.session_state.yourevent['tag'], st.session_state.yourevent['date'], st.session_state.yourevent['time'], st.session_state.yourevent['detail']])
-
+                writer.writerow(new_event_data)
         else:
-            with open(file_path, 'a', encoding='utf-8') as f:
+            with open(file_path, 'a', encoding='utf-8', newline='') as f:
                 writer = csv.writer(f)
-                writer.writerow([st.session_state.yourevent['name'], st.session_state.yourevent['tag'], st.session_state.yourevent['date'], st.session_state.yourevent['time'], st.session_state.yourevent['detail']])
-        
+                writer.writerow(new_event_data)
+        st.success('イベントが追加されました')
         st.rerun()
 
-
-if st.button('イベントを追加'):
-    add_event()
-    st.session_state.yourevent = None
-    # st.success('イベントが追加されました')
-
+with col2:
+    if st.button('イベントを追加', key='add_event_dialog_button'):
+        add_event()
 
 keyword = st.text_input(
     label="イベント名・キーワード検索",
@@ -62,19 +53,67 @@ if keyword:
 
 st.divider()
 
-df = pd.read_csv('event_data.csv')
+page_selection = st.radio(
+    '表示するページを選択してください',
+    ('すべてのイベント', 'お気に入りのイベント'),
+    horizontal=True
+)
 
-# --- 検索フィルタ ---
-if keyword:
-    filtered_df = df[df.apply(lambda row: row.astype(str).str.contains(keyword, case=False).any(), axis=1)]
-    st.subheader(f"検索結果：{len(filtered_df)} 件")
+TAG_IMAGES = {
+    '花火大会': 'images/花火大会.jpeg',
+    '祭り': 'images/祭り.jpg',
+    'コンサート': 'images/コンサート.jpg',
+}
+DEFAULT_IMAGE = 'images/default.jpg'
+
+df = pd.read_csv(file_path)
+
+if df.empty:
+    st.info("イベントデータがありません。イベントを追加してください。")
 else:
-    filtered_df = df
+    df['tag_list'] = df['tag'].apply(lambda x: ast.literal_eval(x) if pd.notna(x) and isinstance(x, str) and x.strip().startswith('[') else [])
 
-for index, row in filtered_df.iterrows():
-    with st.container(border=True):
-        st.markdown(f"#### {row['name']}")
-        
-        st.write(f"**日時:** {row['date']} {row['time']}")
-        
-        st.write(f"**詳細:** {row['detail']}")
+    # --- 検索フィルタ ---
+    if keyword:
+        df_to_show = df[df.apply(lambda row: row.astype(str).str.contains(keyword, case=False).any(), axis=1)]
+        st.subheader(f"検索結果：{len(df_to_show)} 件")
+    else:
+        df_to_show = df
+
+    if page_selection == 'お気に入りのイベント':
+        liked_events = st.session_state.likes
+        if not liked_events:
+            st.info('お気に入りしたイベントはまだありません。')
+            st.stop()
+        df_to_show = df[df['name'].isin(liked_events)]
+
+    for index, row in df_to_show.iterrows():
+        with st.container(border=True):
+            col_content, col_image = st.columns([3, 1])
+
+            with col_content:
+                st.markdown(f"#### {row['name']}")
+                st.write(f"**日時:** {row['date']} {row['time']}")
+                st.write(f"**詳細:** {row['detail']}")
+
+                event_name = row['name']
+                is_liked = event_name in st.session_state.likes
+                button_text = '❤️ お気に入り' if is_liked else '🤍 '
+                    
+                if st.button(button_text, key=f"like_button_{index}"):
+                    if is_liked:
+                        st.session_state.likes.remove(event_name)
+                    else:                            st.session_state.likes.append(event_name)
+                    st.rerun()
+                
+            with col_image:
+                image_path = DEFAULT_IMAGE
+                tags_for_event = row['tag_list']
+                    
+                for tag in tags_for_event:
+                    if tag in TAG_IMAGES:
+                        image_path = TAG_IMAGES[tag]
+                        break
+                    
+                if os.path.exists(image_path):
+                    st.image(image_path, width=500)
