@@ -73,21 +73,23 @@ if df.empty:
 else:
     df['tag_list'] = df['tag'].apply(lambda x: ast.literal_eval(x) if pd.notna(x) and isinstance(x, str) and x.strip().startswith('[') else [])
 
-    # --- 検索フィルタ ---
-    if keyword:
-        df_to_show = df[df.apply(lambda row: row.astype(str).str.contains(keyword, case=False).any(), axis=1)]
-        st.subheader(f"検索結果：{len(df_to_show)} 件")
-    else:
-        df_to_show = df
-
     if page_selection == 'お気に入りのイベント':
         liked_events = st.session_state.likes
         if not liked_events:
             st.info('お気に入りしたイベントはまだありません。')
             st.stop()
         df_to_show = df[df['name'].isin(liked_events)]
+    else:
+        df_to_show = df
 
-    for index, row in df_to_show.iterrows():
+    # --- 検索フィルタ ---
+    if keyword:
+        df_filtered = df_to_show[df_to_show.apply(lambda row: row.astype(str).str.contains(keyword, case=False).any(), axis=1)]
+        st.subheader(f"検索結果：{len(df_filtered)} 件")
+    else:
+        df_filtered = df_to_show
+
+    for index, row in df_filtered.iterrows():
         with st.container(border=True):
             col_content, col_image = st.columns([3, 1])
 
